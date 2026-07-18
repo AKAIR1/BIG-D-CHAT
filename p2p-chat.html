@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P2P Chat — Direktverbindung</title>
+
+<!-- PeerJS wird über CDN eingebunden. PeerJS kapselt WebRTC (DataChannel) und übernimmt
+     nur das initiale "Signaling" (Adressvermittlung über einen öffentlichen Broker-Server).
+     Die eigentlichen Chat-Daten fließen danach direkt (P2P) zwischen den Browsern. -->
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+<style>
+  :root{
+    --bg-0:#0d0e14;
+    --bg-1:#14151f;
+    --bg-2:#1b1c29;
+    --line:#2a2b3d;
+    --text-0:#eceaf7;
+    --text-1:#9d9cb8;
+    --accent-a:#7c5cff;
+    --accent-b:#4a8cff;
+    --ok:#3ddc97;
+    --danger:#ff5c7a;
+    --radius:14px;
+    --font-display:"Space Grotesk","Segoe UI",sans-serif;
+    --font-body:"Inter","Segoe UI",sans-serif;
+  }
+
+  *{ box-sizing:border-box; }
+
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:
+      radial-gradient(circle at 15% -10%, rgba(124,92,255,.18), transparent 45%),
+      radial-gradient(circle at 100% 10%, rgba(74,140,255,.12), transparent 40%),
+      var(--bg-0);
+    color:var(--text-0);
+    font-family:var(--font-body);
+  }
+
+  h1,h2,h3{ font-family:var(--font-display); margin:0; letter-spacing:.2px; }
+
+  ::selection{ background:var(--accent-a); color:#fff; }
+
+  button{
+    font-family:inherit; cursor:pointer; border:none; border-radius:10px;
+    transition:transform .12s ease, filter .12s ease, background .15s ease;
+  }
+  button:active{ transform:scale(.97); }
+  button:focus-visible, input:focus-visible, textarea:focus-visible{
+    outline:2px solid var(--accent-b); outline-offset:2px;
+  }
+
+  input[type="text"]{
+    background:var(--bg-2); border:1px solid var(--line); color:var(--text-0);
+    border-radius:10px; padding:10px 12px; font-size:14px; width:100%;
+  }
+
+  .btn-primary{
+    background:linear-gradient(135deg,var(--accent-a),var(--accent-b));
+    color:#fff; font-weight:600; padding:11px 18px;
+  }
+  .btn-primary:hover{ filter:brightness(1.1); }
+  .btn-primary:disabled{ opacity:.45; cursor:not-allowed; }
+
+  .btn-ghost{
+    background:transparent; border:1px solid var(--line); color:var(--text-0);
+    padding:10px 14px; font-size:13px;
+  }
+  .btn-ghost:hover{ background:var(--bg-2); }
+
+  .btn-danger{
+    background:rgba(255,92,122,.14); color:var(--danger); border:1px solid rgba(255,92,122,.35);
+    padding:9px 14px; font-size:13px; font-weight:600;
+  }
+  .btn-danger:hover{ background:rgba(255,92,122,.25); }
+
+  /* ---------- App Shell ---------- */
+  #app{
+    max-width:1180px; margin:0 auto; padding:28px 20px 40px;
+    min-height:100%; display:flex; flex-direction:column; gap:22px;
+  }
+
+  .topbar{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand .dot{
+    width:11px; height:11px; border-radius:50%;
+    background:linear-gradient(135deg,var(--accent-a),var(--accent-b));
+    box-shadow:0 0 14px rgba(124,92,255,.7);
+  }
+  .brand span{ font-size:20px; font-weight:700; }
+
+  .status-pill{
+    display:flex; align-items:center; gap:8px;
+    background:var(--bg-1); border:1px solid var(--line);
+    padding:7px 14px; border-radius:999px; font-size:13px; color:var(--text-1);
+  }
+  .status-pill .indicator{
+    width:8px; height:8px; border-radius:50%; background:var(--text-1); flex:none;
+  }
+  .status-pill.connected .indicator{ background:var(--ok); box-shadow:0 0 8px var(--ok); }
+  .status-pill.waiting .indicator{ background:#f5b942; box-shadow:0 0 8px #f5b942; }
+  .status-pill.error .indicator{ background:var(--danger); box-shadow:0 0 8px var(--danger); }
+
+  /* ---------- Setup Screen ---------- */
+  #setup{ display:grid; gap:20px; }
+
+  .identity-card{
+    background:var(--bg-1); border:1px solid var(--line); border-radius:var(--radius);
+    padding:20px; display:flex; gap:18px; align-items:center; flex-wrap:wrap;
+  }
+  .avatar-wrap{ position:relative; flex:none; }
+  .avatar{
+    width:64px; height:64px; border-radius:50%; object-fit:cover;
+    border:2px solid var(--line); display:block; background:var(--bg-2);
+  }
+  .avatar-edit{
+    position:absolute; bottom:-2px; right:-2px; width:24px; height:24px; border-radius:50%;
+    background:var(--accent-a); display:flex; align-items:center; justify-content:center;
+    font-size:12px; border:2px solid var(--bg-1);
+  }
+  .identity-fields{ flex:1; min-width:200px; display:flex; flex-direction:column; gap:8px; }
+  .identity-fields label{ font-size:12px; color:var(--text-1); }
+
+  .options-grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  @media (max-width:760px){ .options-grid{ grid-template-columns:1fr; } }
+
+  .option-card{
+    background:var(--bg-1); border:1px solid var(--line); border-radius:var(--radius);
+    padding:22px; display:flex; flex-direction:column; gap:14px;
+  }
+  .option-card .eyebrow{ font-size:12px; color:var(--accent-b); font-weight:700; letter-spacing:1.5px; text-transform:uppercase; }
+  .option-card p.desc{ font-size:13px; color:var(--text-1); margin:0; line-height:1.5; }
+
+  .room-id-display{
+    display:flex; align-items:center; gap:8px; background:var(--bg-2);
+    border:1px dashed var(--line); border-radius:10px; padding:10px 12px;
+  }
+  .room-id-display code{
+    flex:1; font-size:14px; color:var(--accent-b); overflow-wrap:anywhere;
+  }
+
+  .join-row{ display:flex; gap:8px; }
+
+  .hint{ font-size:12px; color:var(--text-1); }
+  .hint.err{ color:var(--danger); }
+
+  /* ---------- Chat Screen ---------- */
+  #chatArea{
+    display:none; gap:20px; grid-template-columns:1fr 300px; flex:1; min-height:0;
+  }
+  #chatArea.active{ display:grid; }
+  @media (max-width:820px){
+    #chatArea.active{ grid-template-columns:1fr; }
+    #sidebar{ order:2; }
+  }
+
+  .panel{
+    background:var(--bg-1); border:1px solid var(--line); border-radius:var(--radius);
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+
+  #chatPanel{ min-height:60vh; }
+
+  .chat-header{
+    padding:14px 18px; border-bottom:1px solid var(--line);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+
+  #messages{
+    flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:10px;
+  }
+  #messages::-webkit-scrollbar{ width:8px; }
+  #messages::-webkit-scrollbar-thumb{ background:var(--line); border-radius:8px; }
+
+  .msg-row{ display:flex; gap:8px; max-width:80%; align-items:flex-end; }
+  .msg-row.own{ align-self:flex-end; flex-direction:row-reverse; }
+  .msg-row img.msg-avatar{
+    width:28px; height:28px; border-radius:50%; object-fit:cover; flex:none; background:var(--bg-2);
+  }
+  .bubble{
+    padding:10px 14px; border-radius:16px; font-size:14px; line-height:1.4; word-break:break-word;
+    background:var(--bg-2); border:1px solid var(--line); color:var(--text-0);
+  }
+  .msg-row.own .bubble{
+    background:linear-gradient(135deg,#1f5f4b,#1a4a3c);
+    border-color:#2a6a54;
+    border-bottom-right-radius:4px;
+  }
+  .msg-row:not(.own) .bubble{
+    background:#23242f; border-bottom-left-radius:4px;
+  }
+  .msg-meta{ font-size:10px; color:var(--text-1); margin-top:3px; }
+
+  .system-msg{
+    text-align:center; font-size:12px; color:var(--text-1); padding:4px 0;
+  }
+
+  .composer{
+    display:flex; gap:10px; padding:14px 18px; border-top:1px solid var(--line);
+  }
+  .composer input{ flex:1; }
+
+  /* ---------- Sidebar / Admin ---------- */
+  #sidebar{ padding:18px; gap:16px; }
+  .sidebar-title{ font-size:12px; text-transform:uppercase; letter-spacing:1.2px; color:var(--text-1); font-weight:700; }
+
+  .profile-card{
+    display:flex; align-items:center; gap:12px; background:var(--bg-2);
+    border:1px solid var(--line); border-radius:12px; padding:12px;
+  }
+  .profile-card img{ width:44px; height:44px; border-radius:50%; object-fit:cover; flex:none; }
+  .profile-card .name{ font-weight:600; font-size:14px; }
+  .profile-card .role{ font-size:11px; color:var(--accent-b); }
+
+  #sidebar .section{ display:flex; flex-direction:column; gap:10px; margin-top:14px; }
+
+  footer.app-footer{ text-align:center; font-size:11px; color:var(--text-1); padding-top:6px; }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <div class="topbar">
+    <div class="brand"><span class="dot"></span><span>DirectLine</span></div>
+    <div class="status-pill waiting" id="statusPill">
+      <span class="indicator"></span>
+      <span id="statusText">Bereit</span>
+    </div>
+  </div>
+
+  <!-- ================= SETUP SCREEN ================= -->
+  <div id="setup">
+
+    <div class="identity-card">
+      <div class="avatar-wrap">
+        <img id="avatarPreview" class="avatar" alt="Profilbild">
+        <div class="avatar-edit">✎</div>
+        <input type="file" id="avatarInput" accept="image/*" style="position:absolute; inset:0; opacity:0; cursor:pointer;">
+      </div>
+      <div class="identity-fields">
+        <label for="nameInput">Dein Anzeigename</label>
+        <input type="text" id="nameInput" maxlength="24">
+        <span class="hint">Tippe auf das Bild, um ein eigenes Profilbild hochzuladen.</span>
+      </div>
+    </div>
+
+    <div class="options-grid">
+
+      <!-- Option A: Host -->
+      <div class="option-card">
+        <span class="eyebrow">Option A</span>
+        <h2>Raum erstellen</h2>
+        <p class="desc">Du wirst Host dieses Raums und erhältst automatisch Admin-Rechte. Teile deine Raum-ID mit einer zweiten Person.</p>
+        <button class="btn-primary" id="createRoomBtn">Raum erstellen</button>
+        <div id="hostIdBox" style="display:none;">
+          <div class="room-id-display">
+            <code id="hostIdText">–</code>
+            <button class="btn-ghost" id="copyIdBtn">Kopieren</button>
+          </div>
+          <p class="hint" id="hostStatusHint">Warte auf einen Teilnehmer …</p>
+        </div>
+      </div>
+
+      <!-- Option B: Guest -->
+      <div class="option-card">
+        <span class="eyebrow">Option B</span>
+        <h2>Raum beitreten</h2>
+        <p class="desc">Gib die Raum-ID des Hosts ein, um dich direkt per WebRTC zu verbinden.</p>
+        <div class="join-row">
+          <input type="text" id="joinIdInput" placeholder="Raum-ID einfügen …">
+          <button class="btn-primary" id="joinRoomBtn">Beitreten</button>
+        </div>
+        <p class="hint err" id="joinErrorHint" style="display:none;"></p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================= CHAT SCREEN ================= -->
+  <div id="chatArea">
+    <div class="panel" id="chatPanel">
+      <div class="chat-header">
+        <h3 id="chatTitle">Chat</h3>
+      </div>
+      <div id="messages"></div>
+      <div class="composer">
+        <input type="text" id="msgInput" placeholder="Nachricht schreiben …" maxlength="1000" disabled>
+        <button class="btn-primary" id="sendBtn" disabled>Senden</button>
+      </div>
+    </div>
+
+    <div class="panel" id="sidebar">
+      <span class="sidebar-title">Mein Profil</span>
+      <div class="profile-card">
+        <img id="myProfileImg" alt="">
+        <div>
+          <div class="name" id="myProfileName">–</div>
+          <div class="role" id="myProfileRole">–</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <span class="sidebar-title">Verbunden mit</span>
+        <div class="profile-card" id="peerCard" style="display:none;">
+          <img id="peerProfileImg" alt="">
+          <div>
+            <div class="name" id="peerProfileName">–</div>
+            <div class="role" id="peerProfileRole">–</div>
+          </div>
+        </div>
+        <p class="hint" id="noPeerHint">Noch niemand verbunden.</p>
+      </div>
+
+      <div class="section" id="adminSection" style="display:none;">
+        <span class="sidebar-title">Admin-Aktionen</span>
+        <button class="btn-danger" id="kickBtn">Teilnehmer kicken</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="app-footer">Direkte P2P-Verbindung über WebRTC · Keine Nachricht läuft über einen Server</footer>
+</div>
+
+<script>
+/* =========================================================================
+   P2P CHAT — Ablauf in Kurzform
+   1. PeerJS erzeugt für jeden Client eine eindeutige "Peer-ID" über einen
+      öffentlichen Signaling-Server (nur für den Verbindungsaufbau nötig).
+   2. Der HOST ruft "new Peer()" auf und wartet passiv auf eingehende
+      Verbindungen (peer.on('connection', ...)).
+   3. Der GUEST ruft ebenfalls "new Peer()" auf und verbindet sich dann
+      aktiv zur Host-ID via "peer.connect(hostId)".
+   4. Sobald der DataChannel offen ist, tauschen beide Seiten ein
+      "handshake"-Objekt (Name + Avatar) aus. Erst danach beginnt der
+      eigentliche Chat.
+   5. Ab hier läuft der komplette Datenverkehr (Chat-Texte, Kick-Signal)
+      direkt zwischen den beiden Browsern — ganz ohne eigenen Server.
+   ========================================================================= */
+
+// ---- Hilfsfunktionen ----------------------------------------------------
+
+// Verhindert XSS: wandelt Sonderzeichen in ihre HTML-Entities um, bevor
+// irgendein nutzergenerierter Text ins DOM geschrieben wird.
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// Standard-Avatar als eingebettetes SVG (Data-URL) — dient als Fallback,
+// solange kein eigenes Profilbild hochgeladen wurde.
+const DEFAULT_AVATAR = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="#23242f"/>
+    <circle cx="50" cy="38" r="18" fill="#5c5d75"/>
+    <path d="M18 90 Q50 60 82 90 Z" fill="#5c5d75"/>
+  </svg>`);
+
+const ADJECTIVES = ['Stille', 'Wilde', 'Blaue', 'Ferne', 'Neue', 'Kluge', 'Freie', 'Helle'];
+const NOUNS = ['Falke', 'Fuchs', 'Komet', 'Nebel', 'Wolf', 'Pinguin', 'Delfin', 'Adler'];
+function randomName() {
+  const a = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+  const n = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+  return `${a}${n}${Math.floor(Math.random() * 90 + 10)}`;
+}
+
+// ---- Anwendungszustand ---------------------------------------------------
+
+let myName = randomName();
+let myAvatar = DEFAULT_AVATAR;
+let myRole = null;      // 'host' | 'guest'
+let peer = null;        // PeerJS-Instanz
+let conn = null;        // aktive DataConnection zum Chatpartner
+let peerName = null;
+let peerAvatar = null;
+let handshakeDone = false;
+
+// ---- DOM-Referenzen -------------------------------------------------------
+
+const nameInput = document.getElementById('nameInput');
+const avatarInput = document.getElementById('avatarInput');
+const avatarPreview = document.getElementById('avatarPreview');
+
+const createRoomBtn = document.getElementById('createRoomBtn');
+const hostIdBox = document.getElementById('hostIdBox');
+const hostIdText = document.getElementById('hostIdText');
+const copyIdBtn = document.getElementById('copyIdBtn');
+const hostStatusHint = document.getElementById('hostStatusHint');
+
+const joinIdInput = document.getElementById('joinIdInput');
+const joinRoomBtn = document.getElementById('joinRoomBtn');
+const joinErrorHint = document.getElementById('joinErrorHint');
+
+const setupEl = document.getElementById('setup');
+const chatArea = document.getElementById('chatArea');
+const messagesEl = document.getElementById('messages');
+const msgInput = document.getElementById('msgInput');
+const sendBtn = document.getElementById('sendBtn');
+const chatTitle = document.getElementById('chatTitle');
+
+const statusPill = document.getElementById('statusPill');
+const statusText = document.getElementById('statusText');
+
+const myProfileImg = document.getElementById('myProfileImg');
+const myProfileName = document.getElementById('myProfileName');
+const myProfileRole = document.getElementById('myProfileRole');
+
+const peerCard = document.getElementById('peerCard');
+const peerProfileImg = document.getElementById('peerProfileImg');
+const peerProfileName = document.getElementById('peerProfileName');
+const peerProfileRole = document.getElementById('peerProfileRole');
+const noPeerHint = document.getElementById('noPeerHint');
+
+const adminSection = document.getElementById('adminSection');
+const kickBtn = document.getElementById('kickBtn');
+
+// ---- Initiale UI-Werte -----------------------------------------------------
+
+nameInput.value = myName;
+avatarPreview.src = myAvatar;
+myProfileImg.src = myAvatar;
+myProfileName.textContent = myName;
+
+nameInput.addEventListener('input', () => {
+  myName = nameInput.value.trim() || randomName();
+  myProfileName.textContent = myName;
+});
+
+avatarInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  // Profilbild wird als Base64-String eingelesen, damit es später problemlos
+  // als JSON-Feld über den DataChannel verschickt werden kann.
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    myAvatar = ev.target.result;
+    avatarPreview.src = myAvatar;
+    myProfileImg.src = myAvatar;
+  };
+  reader.readAsDataURL(file);
+});
+
+function setStatus(mode, text) {
+  statusPill.className = 'status-pill ' + mode;
+  statusText.textContent = text;
+}
+
+// ---- Peer-Erstellung -------------------------------------------------------
+
+function createPeer(onOpen) {
+  // "new Peer()" ohne Argument lässt den (öffentlichen) PeerJS-Broker-Server
+  // automatisch eine zufällige, eindeutige ID vergeben.
+  peer = new Peer();
+  peer.on('open', (id) => onOpen(id));
+  peer.on('error', (err) => {
+    console.error('PeerJS-Fehler:', err);
+    setStatus('error', 'Verbindungsfehler');
+  });
+}
+
+// ---- OPTION A: Raum erstellen (Host) ---------------------------------------
+
+createRoomBtn.addEventListener('click', () => {
+  myRole = 'host';
+  createRoomBtn.disabled = true;
+  setStatus('waiting', 'Erzeuge Raum …');
+
+  createPeer((id) => {
+    hostIdBox.style.display = 'block';
+    hostIdText.textContent = id;
+    setStatus('waiting', 'Warte auf Teilnehmer …');
+
+    // Der Host lauscht passiv auf eingehende Verbindungsanfragen.
+    peer.on('connection', (incomingConn) => {
+      // Es wird nur eine einzige aktive Verbindung pro Raum erlaubt.
+      if (conn) {
+        incomingConn.on('open', () => {
+          incomingConn.send({ type: 'error', reason: 'room-full' });
+          setTimeout(() => incomingConn.close(), 200);
+        });
+        return;
+      }
+      conn = incomingConn;
+      attachConnectionHandlers(conn);
+    });
+  });
+});
+
+copyIdBtn.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(hostIdText.textContent);
+    copyIdBtn.textContent = 'Kopiert ✓';
+    setTimeout(() => (copyIdBtn.textContent = 'Kopieren'), 1500);
+  } catch (e) {
+    console.warn('Zwischenablage nicht verfügbar', e);
+  }
+});
+
+// ---- OPTION B: Raum beitreten (Guest) --------------------------------------
+
+joinRoomBtn.addEventListener('click', () => {
+  const targetId = joinIdInput.value.trim();
+  if (!targetId) return;
+
+  myRole = 'guest';
+  joinRoomBtn.disabled = true;
+  joinErrorHint.style.display = 'none';
+  setStatus('waiting', 'Verbinde …');
+
+  createPeer(() => {
+    // Aktiver Verbindungsaufbau zur Host-ID. PeerJS baut daraus im
+    // Hintergrund einen WebRTC-DataChannel zwischen den beiden Browsern auf.
+    conn = peer.connect(targetId, { reliable: true });
+    attachConnectionHandlers(conn);
+  });
+});
+
+// ---- Gemeinsame Verbindungs-Logik ------------------------------------------
+
+function attachConnectionHandlers(connection) {
+  connection.on('open', () => {
+    // Sobald der DataChannel offen ist, sendet jede Seite ihre Identität.
+    // Der eigentliche Chat startet erst, nachdem der Handshake bestätigt wurde.
+    connection.send({
+      type: 'handshake',
+      name: myName,
+      avatar: myAvatar,
+      role: myRole
+    });
+  });
+
+  connection.on('data', (data) => handleIncomingData(data, connection));
+
+  connection.on('close', () => {
+    handleDisconnect('Die Verbindung wurde beendet.');
+  });
+
+  connection.on('error', (err) => {
+    console.error('Verbindungsfehler:', err);
+    handleDisconnect('Verbindungsfehler.');
+  });
+}
+
+function handleIncomingData(data, connection) {
+  switch (data.type) {
+
+    case 'handshake': {
+      // Namensprüfung: identische Namen sind nicht erlaubt, damit jeder
+      // Teilnehmer im Raum eindeutig identifizierbar bleibt.
+      if (data.name === myName) {
+        connection.send({ type: 'error', reason: 'name-taken' });
+        setTimeout(() => connection.close(), 200);
+        setStatus('error', 'Name bereits vergeben');
+        if (myRole === 'guest') {
+          joinErrorHint.textContent = 'Dieser Name ist bereits im Raum vergeben. Bitte ändere deinen Namen.';
+          joinErrorHint.style.display = 'block';
+          joinRoomBtn.disabled = false;
+        }
+        return;
+      }
+
+      peerName = data.name;
+      peerAvatar = data.avatar || DEFAULT_AVATAR;
+      handshakeDone = true;
+
+      // Bestätigung zurücksenden, damit auch die Gegenseite den Handshake
+      // als abgeschlossen markieren kann (beide Seiten senden das gleiche Event).
+      connection.send({
+        type: 'handshake-ack',
+        name: myName,
+        avatar: myAvatar,
+        role: myRole
+      });
+
+      enterChat();
+      addSystemMessage(`${escapeHtml(peerName)} ist beigetreten.`);
+      break;
+    }
+
+    case 'handshake-ack': {
+      peerName = data.name;
+      peerAvatar = data.avatar || DEFAULT_AVATAR;
+      handshakeDone = true;
+      enterChat();
+      break;
+    }
+
+    case 'chat': {
+      renderMessage({ text: data.text, own: false, name: peerName, avatar: peerAvatar });
+      break;
+    }
+
+    case 'kick': {
+      handleDisconnect('Du wurdest vom Host aus dem Raum entfernt.');
+      break;
+    }
+
+    case 'error': {
+      if (data.reason === 'room-full') {
+        setStatus('error', 'Raum bereits belegt');
+        joinErrorHint.textContent = 'Dieser Raum hat bereits einen Teilnehmer.';
+        joinErrorHint.style.display = 'block';
+      } else if (data.reason === 'name-taken') {
+        setStatus('error', 'Name bereits vergeben');
+        joinErrorHint.textContent = 'Dieser Name ist bereits im Raum vergeben. Bitte ändere deinen Namen und versuche es erneut.';
+        joinErrorHint.style.display = 'block';
+      }
+      joinRoomBtn.disabled = false;
+      break;
+    }
+  }
+}
+
+// ---- UI-Übergang: Setup → Chat ----------------------------------------------
+
+function enterChat() {
+  setupEl.style.display = 'none';
+  chatArea.classList.add('active');
+  setStatus('connected', `Verbunden mit ${myRole === 'host' ? peerName : peerName}`);
+
+  msgInput.disabled = false;
+  sendBtn.disabled = false;
+  chatTitle.textContent = `Chat mit ${peerName}`;
+
+  myProfileRole.textContent = myRole === 'host' ? 'Host / Admin' : 'Gast';
+
+  peerCard.style.display = 'flex';
+  noPeerHint.style.display = 'none';
+  peerProfileImg.src = peerAvatar;
+  peerProfileName.textContent = peerName;
+  peerProfileRole.textContent = myRole === 'host' ? 'Gast' : 'Host / Admin';
+
+  // Nur der Host bekommt die Admin-Aktion "Kicken" angezeigt.
+  adminSection.style.display = (myRole === 'host') ? 'flex' : 'none';
+
+  msgInput.focus();
+}
+
+function handleDisconnect(reason) {
+  setStatus('error', 'Getrennt');
+  addSystemMessage(reason);
+  msgInput.disabled = true;
+  sendBtn.disabled = true;
+  peerCard.style.display = 'none';
+  noPeerHint.style.display = 'block';
+  adminSection.style.display = 'none';
+
+  if (conn) { try { conn.close(); } catch (e) {} }
+  if (peer) { try { peer.destroy(); } catch (e) {} }
+  conn = null;
+  handshakeDone = false;
+}
+
+// ---- Nachrichten senden / anzeigen ------------------------------------------
+
+function addSystemMessage(text) {
+  const div = document.createElement('div');
+  div.className = 'system-msg';
+  div.textContent = text; // textContent verhindert automatisch HTML-Injection
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function renderMessage({ text, own, name, avatar }) {
+  const row = document.createElement('div');
+  row.className = 'msg-row' + (own ? ' own' : '');
+
+  const img = document.createElement('img');
+  img.className = 'msg-avatar';
+  img.src = avatar || DEFAULT_AVATAR;
+
+  const bubbleWrap = document.createElement('div');
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  // escapeHtml schützt vor XSS, bevor der Text (als HTML) eingefügt wird.
+  bubble.innerHTML = escapeHtml(text);
+
+  const meta = document.createElement('div');
+  meta.className = 'msg-meta';
+  meta.textContent = (own ? 'Du' : name) + ' · ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  bubbleWrap.appendChild(bubble);
+  bubbleWrap.appendChild(meta);
+  row.appendChild(img);
+  row.appendChild(bubbleWrap);
+  messagesEl.appendChild(row);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function sendMessage() {
+  const text = msgInput.value.trim();
+  if (!text || !conn || !handshakeDone) return;
+
+  conn.send({ type: 'chat', text });
+  renderMessage({ text, own: true, name: myName, avatar: myAvatar });
+  msgInput.value = '';
+}
+
+sendBtn.addEventListener('click', sendMessage);
+msgInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendMessage();
+});
+
+// ---- Admin: Teilnehmer kicken ------------------------------------------------
+
+kickBtn.addEventListener('click', () => {
+  if (!conn || myRole !== 'host') return;
+  // Abbruch-Signal an den Gast senden, bevor die Verbindung geschlossen wird.
+  conn.send({ type: 'kick' });
+  addSystemMessage(`${peerName} wurde aus dem Raum entfernt.`);
+  setTimeout(() => {
+    if (conn) { try { conn.close(); } catch (e) {} }
+    conn = null;
+    handshakeDone = false;
+    setStatus('waiting', 'Warte auf Teilnehmer …');
+    msgInput.disabled = true;
+    sendBtn.disabled = true;
+    peerCard.style.display = 'none';
+    noPeerHint.style.display = 'block';
+    adminSection.style.display = 'none';
+  }, 150);
+});
+</script>
+</body>
+</html>
