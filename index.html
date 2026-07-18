@@ -51,8 +51,9 @@
   button:focus-visible, input:focus-visible, textarea:focus-visible{
     outline:2px solid var(--accent-b); outline-offset:2px;
   }
+  button:disabled{ opacity:.45; cursor:not-allowed; }
 
-  input[type="text"]{
+  input[type="text"], input[type="password"]{
     background:var(--bg-2); border:1px solid var(--line); color:var(--text-0);
     border-radius:10px; padding:10px 12px; font-size:14px; width:100%;
   }
@@ -62,7 +63,6 @@
     color:#fff; font-weight:600; padding:11px 18px;
   }
   .btn-primary:hover{ filter:brightness(1.1); }
-  .btn-primary:disabled{ opacity:.45; cursor:not-allowed; }
 
   .btn-ghost{
     background:transparent; border:1px solid var(--line); color:var(--text-0);
@@ -72,7 +72,7 @@
 
   .btn-danger{
     background:rgba(255,92,122,.14); color:var(--danger); border:1px solid rgba(255,92,122,.35);
-    padding:9px 14px; font-size:13px; font-weight:600;
+    padding:6px 12px; font-size:12px; font-weight:600;
   }
   .btn-danger:hover{ background:rgba(255,92,122,.25); }
 
@@ -132,16 +132,18 @@
   }
   .option-card .eyebrow{ font-size:12px; color:var(--accent-b); font-weight:700; letter-spacing:1.5px; text-transform:uppercase; }
   .option-card p.desc{ font-size:13px; color:var(--text-1); margin:0; line-height:1.5; }
+  .field-label{ font-size:12px; color:var(--text-1); margin-bottom:-6px; }
 
   .room-id-display{
     display:flex; align-items:center; gap:8px; background:var(--bg-2);
     border:1px dashed var(--line); border-radius:10px; padding:10px 12px;
   }
   .room-id-display code{
-    flex:1; font-size:14px; color:var(--accent-b); overflow-wrap:anywhere;
+    flex:1; font-size:20px; letter-spacing:3px; font-weight:700; color:var(--accent-b);
   }
 
   .join-row{ display:flex; gap:8px; }
+  .join-row input{ text-transform:uppercase; letter-spacing:2px; }
 
   .hint{ font-size:12px; color:var(--text-1); }
   .hint.err{ color:var(--danger); }
@@ -167,6 +169,7 @@
     padding:14px 18px; border-bottom:1px solid var(--line);
     display:flex; align-items:center; justify-content:space-between;
   }
+  .chat-header .room-tag{ font-size:11px; color:var(--text-1); letter-spacing:1px; }
 
   #messages{
     flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:10px;
@@ -216,6 +219,17 @@
 
   #sidebar .section{ display:flex; flex-direction:column; gap:10px; margin-top:14px; }
 
+  .participant-row{
+    display:flex; align-items:center; gap:10px; background:var(--bg-2);
+    border:1px solid var(--line); border-radius:12px; padding:9px 10px;
+  }
+  .participant-row img{ width:36px; height:36px; border-radius:50%; object-fit:cover; flex:none; }
+  .participant-row .info{ flex:1; min-width:0; }
+  .participant-row .name{ font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .participant-row .role{ font-size:10px; color:var(--accent-b); }
+
+  #participantCount{ color:var(--text-1); font-weight:400; }
+
   footer.app-footer{ text-align:center; font-size:11px; color:var(--text-1); padding-top:6px; }
 </style>
 </head>
@@ -243,7 +257,7 @@
       <div class="identity-fields">
         <label for="nameInput">Dein Anzeigename</label>
         <input type="text" id="nameInput" maxlength="24">
-        <span class="hint">Tippe auf das Bild, um ein eigenes Profilbild hochzuladen.</span>
+        <span class="hint">Name und Profilbild werden lokal gespeichert und beim nächsten Besuch wiederverwendet.</span>
       </div>
     </div>
 
@@ -253,14 +267,16 @@
       <div class="option-card">
         <span class="eyebrow">Option A</span>
         <h2>Raum erstellen</h2>
-        <p class="desc">Du wirst Host dieses Raums und erhältst automatisch Admin-Rechte. Teile deine Raum-ID mit einer zweiten Person.</p>
+        <p class="desc">Du wirst Host dieses Raums und erhältst automatisch Admin-Rechte. Vergib ein Passwort — nur wer es kennt, kann beitreten.</p>
+        <span class="field-label">Raum-Passwort</span>
+        <input type="password" id="hostPasswordInput" placeholder="Passwort festlegen …">
         <button class="btn-primary" id="createRoomBtn">Raum erstellen</button>
         <div id="hostIdBox" style="display:none;">
           <div class="room-id-display">
             <code id="hostIdText">–</code>
             <button class="btn-ghost" id="copyIdBtn">Kopieren</button>
           </div>
-          <p class="hint" id="hostStatusHint">Warte auf einen Teilnehmer …</p>
+          <p class="hint" id="hostStatusHint">Warte auf Teilnehmer …</p>
         </div>
       </div>
 
@@ -268,11 +284,12 @@
       <div class="option-card">
         <span class="eyebrow">Option B</span>
         <h2>Raum beitreten</h2>
-        <p class="desc">Gib die Raum-ID des Hosts ein, um dich direkt per WebRTC zu verbinden.</p>
-        <div class="join-row">
-          <input type="text" id="joinIdInput" placeholder="Raum-ID einfügen …">
-          <button class="btn-primary" id="joinRoomBtn">Beitreten</button>
-        </div>
+        <p class="desc">Gib die Raum-ID und das Passwort ein, um dich direkt per WebRTC zu verbinden. Mehrere Personen können demselben Raum beitreten.</p>
+        <span class="field-label">Raum-ID</span>
+        <input type="text" id="joinIdInput" placeholder="z. B. 7XK4QP" maxlength="6">
+        <span class="field-label">Passwort</span>
+        <input type="password" id="joinPasswordInput" placeholder="Raum-Passwort">
+        <button class="btn-primary" id="joinRoomBtn">Beitreten</button>
         <p class="hint err" id="joinErrorHint" style="display:none;"></p>
       </div>
 
@@ -284,6 +301,7 @@
     <div class="panel" id="chatPanel">
       <div class="chat-header">
         <h3 id="chatTitle">Chat</h3>
+        <span class="room-tag" id="roomTag"></span>
       </div>
       <div id="messages"></div>
       <div class="composer">
@@ -303,41 +321,32 @@
       </div>
 
       <div class="section">
-        <span class="sidebar-title">Verbunden mit</span>
-        <div class="profile-card" id="peerCard" style="display:none;">
-          <img id="peerProfileImg" alt="">
-          <div>
-            <div class="name" id="peerProfileName">–</div>
-            <div class="role" id="peerProfileRole">–</div>
-          </div>
-        </div>
+        <span class="sidebar-title">Teilnehmer <span id="participantCount"></span></span>
+        <div id="participantList"></div>
         <p class="hint" id="noPeerHint">Noch niemand verbunden.</p>
-      </div>
-
-      <div class="section" id="adminSection" style="display:none;">
-        <span class="sidebar-title">Admin-Aktionen</span>
-        <button class="btn-danger" id="kickBtn">Teilnehmer kicken</button>
       </div>
     </div>
   </div>
 
-  <footer class="app-footer">Direkte P2P-Verbindung über WebRTC · Keine Nachricht läuft über einen Server</footer>
+  <footer class="app-footer">Direkte P2P-Verbindung über WebRTC · Keine Nachricht läuft über einen fremden Server</footer>
 </div>
 
 <script>
 /* =========================================================================
-   P2P CHAT — Ablauf in Kurzform
-   1. PeerJS erzeugt für jeden Client eine eindeutige "Peer-ID" über einen
-      öffentlichen Signaling-Server (nur für den Verbindungsaufbau nötig).
-   2. Der HOST ruft "new Peer()" auf und wartet passiv auf eingehende
-      Verbindungen (peer.on('connection', ...)).
-   3. Der GUEST ruft ebenfalls "new Peer()" auf und verbindet sich dann
-      aktiv zur Host-ID via "peer.connect(hostId)".
-   4. Sobald der DataChannel offen ist, tauschen beide Seiten ein
-      "handshake"-Objekt (Name + Avatar) aus. Erst danach beginnt der
-      eigentliche Chat.
-   5. Ab hier läuft der komplette Datenverkehr (Chat-Texte, Kick-Signal)
-      direkt zwischen den beiden Browsern — ganz ohne eigenen Server.
+   P2P CHAT — Architektur in Kurzform (Stern-Topologie über den Host)
+   1. PeerJS erzeugt für jeden Client eine Peer-ID über einen öffentlichen
+      Signaling-Server (nur für den Verbindungsaufbau nötig).
+   2. Der HOST vergibt sich selbst eine kurze, gut merkbare Raum-ID
+      ("new Peer(kurzeId)") und wartet passiv auf eingehende Verbindungen.
+   3. Jeder GUEST verbindet sich direkt zur Raum-ID des Hosts
+      ("peer.connect(raumId)") und schickt beim Handshake Name, Avatar
+      und das Raum-Passwort mit.
+   4. Der Host ist damit der zentrale Knotenpunkt: Chat-Nachrichten eines
+      Gastes werden vom Host an alle anderen Gäste weitergeleitet
+      (Broadcast). Es läuft weiterhin alles über direkte WebRTC-Verbindungen
+      und benötigt keinen eigenen Server — der Host übernimmt nur die
+      Vermittlerrolle innerhalb des Raums.
+   5. Nur der Host hat Admin-Rechte (z. B. einzelne Teilnehmer kicken).
    ========================================================================= */
 
 // ---- Hilfsfunktionen ----------------------------------------------------
@@ -367,16 +376,36 @@ function randomName() {
   return `${a}${n}${Math.floor(Math.random() * 90 + 10)}`;
 }
 
-// ---- Anwendungszustand ---------------------------------------------------
+// Kurze, gut lesbare Raum-ID (6 Zeichen, ohne verwechselbare Zeichen wie 0/O/1/I).
+const ROOM_CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function generateRoomCode() {
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)];
+  }
+  return code;
+}
 
-let myName = randomName();
-let myAvatar = DEFAULT_AVATAR;
-let myRole = null;      // 'host' | 'guest'
-let peer = null;        // PeerJS-Instanz
-let conn = null;        // aktive DataConnection zum Chatpartner
-let peerName = null;
-let peerAvatar = null;
-let handshakeDone = false;
+// ---- Account-Persistenz (localStorage) -------------------------------------
+// Name und Profilbild bleiben über Seitenaufrufe hinweg erhalten, damit
+// der Nutzer seinen "Account" (Identität) nicht jedes Mal neu einrichten muss.
+const STORAGE_KEY_NAME = 'p2pchat_name';
+const STORAGE_KEY_AVATAR = 'p2pchat_avatar';
+
+let myName = localStorage.getItem(STORAGE_KEY_NAME) || randomName();
+let myAvatar = localStorage.getItem(STORAGE_KEY_AVATAR) || DEFAULT_AVATAR;
+if (!localStorage.getItem(STORAGE_KEY_NAME)) localStorage.setItem(STORAGE_KEY_NAME, myName);
+
+let myRole = null;          // 'host' | 'guest'
+let peer = null;            // eigene PeerJS-Instanz
+let roomPassword = null;    // nur dem Host bekannt, wird beim Handshake geprüft
+let roomId = null;
+
+// connections: Map von peerId -> { conn, name, avatar, role }
+// Beim Host enthält diese Map alle verbundenen Gäste.
+// Beim Guest enthält diese Map (informativ) alle bekannten Teilnehmer des Raums.
+const connections = new Map();
+let hostConn = null; // beim Guest: die eine Verbindung zum Host
 
 // ---- DOM-Referenzen -------------------------------------------------------
 
@@ -384,6 +413,7 @@ const nameInput = document.getElementById('nameInput');
 const avatarInput = document.getElementById('avatarInput');
 const avatarPreview = document.getElementById('avatarPreview');
 
+const hostPasswordInput = document.getElementById('hostPasswordInput');
 const createRoomBtn = document.getElementById('createRoomBtn');
 const hostIdBox = document.getElementById('hostIdBox');
 const hostIdText = document.getElementById('hostIdText');
@@ -391,6 +421,7 @@ const copyIdBtn = document.getElementById('copyIdBtn');
 const hostStatusHint = document.getElementById('hostStatusHint');
 
 const joinIdInput = document.getElementById('joinIdInput');
+const joinPasswordInput = document.getElementById('joinPasswordInput');
 const joinRoomBtn = document.getElementById('joinRoomBtn');
 const joinErrorHint = document.getElementById('joinErrorHint');
 
@@ -400,6 +431,7 @@ const messagesEl = document.getElementById('messages');
 const msgInput = document.getElementById('msgInput');
 const sendBtn = document.getElementById('sendBtn');
 const chatTitle = document.getElementById('chatTitle');
+const roomTag = document.getElementById('roomTag');
 
 const statusPill = document.getElementById('statusPill');
 const statusText = document.getElementById('statusText');
@@ -408,14 +440,9 @@ const myProfileImg = document.getElementById('myProfileImg');
 const myProfileName = document.getElementById('myProfileName');
 const myProfileRole = document.getElementById('myProfileRole');
 
-const peerCard = document.getElementById('peerCard');
-const peerProfileImg = document.getElementById('peerProfileImg');
-const peerProfileName = document.getElementById('peerProfileName');
-const peerProfileRole = document.getElementById('peerProfileRole');
+const participantList = document.getElementById('participantList');
+const participantCount = document.getElementById('participantCount');
 const noPeerHint = document.getElementById('noPeerHint');
-
-const adminSection = document.getElementById('adminSection');
-const kickBtn = document.getElementById('kickBtn');
 
 // ---- Initiale UI-Werte -----------------------------------------------------
 
@@ -427,18 +454,20 @@ myProfileName.textContent = myName;
 nameInput.addEventListener('input', () => {
   myName = nameInput.value.trim() || randomName();
   myProfileName.textContent = myName;
+  localStorage.setItem(STORAGE_KEY_NAME, myName);
 });
 
 avatarInput.addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
   // Profilbild wird als Base64-String eingelesen, damit es später problemlos
-  // als JSON-Feld über den DataChannel verschickt werden kann.
+  // als JSON-Feld über den DataChannel verschickt und lokal gespeichert werden kann.
   const reader = new FileReader();
   reader.onload = (ev) => {
     myAvatar = ev.target.result;
     avatarPreview.src = myAvatar;
     myProfileImg.src = myAvatar;
+    localStorage.setItem(STORAGE_KEY_AVATAR, myAvatar);
   };
   reader.readAsDataURL(file);
 });
@@ -450,44 +479,63 @@ function setStatus(mode, text) {
 
 // ---- Peer-Erstellung -------------------------------------------------------
 
-function createPeer(onOpen) {
-  // "new Peer()" ohne Argument lässt den (öffentlichen) PeerJS-Broker-Server
-  // automatisch eine zufällige, eindeutige ID vergeben.
-  peer = new Peer();
+// customId: optionale gewünschte (kurze) ID, z. B. für den Host-Raum.
+function createPeer(customId, onOpen, onFatalError) {
+  peer = customId ? new Peer(customId) : new Peer();
   peer.on('open', (id) => onOpen(id));
   peer.on('error', (err) => {
     console.error('PeerJS-Fehler:', err);
-    setStatus('error', 'Verbindungsfehler');
+    if (onFatalError) onFatalError(err);
   });
 }
 
 // ---- OPTION A: Raum erstellen (Host) ---------------------------------------
 
 createRoomBtn.addEventListener('click', () => {
+  const pw = hostPasswordInput.value;
+  if (!pw) {
+    hostPasswordInput.focus();
+    return;
+  }
+  roomPassword = pw;
   myRole = 'host';
   createRoomBtn.disabled = true;
   setStatus('waiting', 'Erzeuge Raum …');
 
-  createPeer((id) => {
+  tryCreateHostRoom(0);
+});
+
+// Da die kurze Raum-ID theoretisch (selten) bereits vergeben sein kann,
+// wird bei einem Kollisions-Fehler automatisch eine neue ID generiert.
+function tryCreateHostRoom(attempt) {
+  if (attempt > 5) {
+    setStatus('error', 'Raum konnte nicht erstellt werden');
+    createRoomBtn.disabled = false;
+    return;
+  }
+  const candidateId = generateRoomCode();
+
+  createPeer(candidateId, (id) => {
+    roomId = id;
     hostIdBox.style.display = 'block';
     hostIdText.textContent = id;
     setStatus('waiting', 'Warte auf Teilnehmer …');
 
-    // Der Host lauscht passiv auf eingehende Verbindungsanfragen.
+    // Der Host lauscht dauerhaft auf eingehende Verbindungsanfragen —
+    // beliebig viele Gäste können demselben Raum beitreten.
     peer.on('connection', (incomingConn) => {
-      // Es wird nur eine einzige aktive Verbindung pro Raum erlaubt.
-      if (conn) {
-        incomingConn.on('open', () => {
-          incomingConn.send({ type: 'error', reason: 'room-full' });
-          setTimeout(() => incomingConn.close(), 200);
-        });
-        return;
-      }
-      conn = incomingConn;
-      attachConnectionHandlers(conn);
+      attachHostConnectionHandlers(incomingConn);
     });
+  }, (err) => {
+    if (err.type === 'unavailable-id') {
+      if (peer) peer.destroy();
+      tryCreateHostRoom(attempt + 1);
+    } else {
+      setStatus('error', 'Verbindungsfehler');
+      createRoomBtn.disabled = false;
+    }
   });
-});
+}
 
 copyIdBtn.addEventListener('click', async () => {
   try {
@@ -502,94 +550,177 @@ copyIdBtn.addEventListener('click', async () => {
 // ---- OPTION B: Raum beitreten (Guest) --------------------------------------
 
 joinRoomBtn.addEventListener('click', () => {
-  const targetId = joinIdInput.value.trim();
-  if (!targetId) return;
+  const targetId = joinIdInput.value.trim().toUpperCase();
+  const pw = joinPasswordInput.value;
+  if (!targetId || !pw) return;
 
   myRole = 'guest';
   joinRoomBtn.disabled = true;
   joinErrorHint.style.display = 'none';
   setStatus('waiting', 'Verbinde …');
 
-  createPeer(() => {
+  createPeer(null, () => {
     // Aktiver Verbindungsaufbau zur Host-ID. PeerJS baut daraus im
     // Hintergrund einen WebRTC-DataChannel zwischen den beiden Browsern auf.
-    conn = peer.connect(targetId, { reliable: true });
-    attachConnectionHandlers(conn);
+    hostConn = peer.connect(targetId, { reliable: true });
+    roomId = targetId;
+
+    hostConn.on('open', () => {
+      hostConn.send({
+        type: 'handshake',
+        password: pw,
+        name: myName,
+        avatar: myAvatar
+      });
+    });
+
+    hostConn.on('data', (data) => handleGuestData(data));
+
+    hostConn.on('close', () => handleDisconnect('Die Verbindung zum Host wurde beendet.'));
+    hostConn.on('error', (err) => {
+      console.error(err);
+      setStatus('error', 'Verbindungsfehler');
+      joinRoomBtn.disabled = false;
+    });
+  }, () => {
+    setStatus('error', 'Verbindungsfehler');
+    joinRoomBtn.disabled = false;
   });
 });
 
-// ---- Gemeinsame Verbindungs-Logik ------------------------------------------
+// =========================================================================
+// HOST-LOGIK: verwaltet beliebig viele Gäste, prüft Passwort & Namen,
+// und leitet Chat-Nachrichten an alle anderen Teilnehmer weiter.
+// =========================================================================
 
-function attachConnectionHandlers(connection) {
-  connection.on('open', () => {
-    // Sobald der DataChannel offen ist, sendet jede Seite ihre Identität.
-    // Der eigentliche Chat startet erst, nachdem der Handshake bestätigt wurde.
-    connection.send({
-      type: 'handshake',
-      name: myName,
-      avatar: myAvatar,
-      role: myRole
-    });
+function attachHostConnectionHandlers(connection) {
+  connection.on('data', (data) => {
+    if (data.type === 'handshake') {
+      handleHostHandshake(connection, data);
+      return;
+    }
+    if (data.type === 'chat') {
+      const entry = connections.get(connection.peer);
+      if (!entry) return;
+      // Nachricht lokal beim Host anzeigen …
+      renderMessage({ text: data.text, own: false, name: entry.name, avatar: entry.avatar });
+      // … und an alle anderen Gäste weiterleiten (Broadcast, Sender ausgenommen).
+      broadcast({
+        type: 'chat',
+        text: data.text,
+        senderId: connection.peer,
+        senderName: entry.name,
+        senderAvatar: entry.avatar
+      }, connection.peer);
+    }
   });
-
-  connection.on('data', (data) => handleIncomingData(data, connection));
 
   connection.on('close', () => {
-    handleDisconnect('Die Verbindung wurde beendet.');
-  });
-
-  connection.on('error', (err) => {
-    console.error('Verbindungsfehler:', err);
-    handleDisconnect('Verbindungsfehler.');
+    const entry = connections.get(connection.peer);
+    if (!entry) return;
+    connections.delete(connection.peer);
+    addSystemMessage(`${entry.name} hat den Raum verlassen.`);
+    broadcast({ type: 'user-left', id: connection.peer, name: entry.name });
+    refreshParticipantUI();
   });
 }
 
-function handleIncomingData(data, connection) {
+function handleHostHandshake(connection, data) {
+  // Passwort-Prüfung: nur wer das korrekte Raum-Passwort kennt, darf beitreten.
+  if (data.password !== roomPassword) {
+    connection.send({ type: 'error', reason: 'wrong-password' });
+    setTimeout(() => connection.close(), 200);
+    return;
+  }
+
+  // Namensprüfung: kein Name darf im selben Raum doppelt vorkommen.
+  const nameTaken = data.name === myName ||
+    [...connections.values()].some((p) => p.name === data.name);
+  if (nameTaken) {
+    connection.send({ type: 'error', reason: 'name-taken' });
+    setTimeout(() => connection.close(), 200);
+    return;
+  }
+
+  // Teilnehmer aufnehmen.
+  connections.set(connection.peer, {
+    conn: connection, name: data.name, avatar: data.avatar || DEFAULT_AVATAR, role: 'guest'
+  });
+
+  // Aktuelle Teilnehmerliste (inkl. Host) an den neuen Gast schicken,
+  // damit er sofort weiß, wer schon im Raum ist.
+  const roster = [{ id: peer.id, name: myName, avatar: myAvatar, role: 'host' }];
+  connections.forEach((p, id) => roster.push({ id, name: p.name, avatar: p.avatar, role: 'guest' }));
+
+  connection.send({ type: 'handshake-ack', roster });
+
+  // Alle anderen Gäste über den Neuzugang informieren.
+  broadcast({
+    type: 'user-joined',
+    id: connection.peer, name: data.name, avatar: data.avatar || DEFAULT_AVATAR
+  }, connection.peer);
+
+  addSystemMessage(`${data.name} ist beigetreten.`);
+  enterChat();
+  refreshParticipantUI();
+}
+
+// Sendet ein Datenpaket an alle verbundenen Gäste (optional einen ausschließen).
+function broadcast(payload, excludePeerId) {
+  connections.forEach((entry, id) => {
+    if (id === excludePeerId) return;
+    try { entry.conn.send(payload); } catch (e) {}
+  });
+}
+
+// Host: einzelnen Teilnehmer kicken.
+function kickParticipant(peerId) {
+  const entry = connections.get(peerId);
+  if (!entry) return;
+  entry.conn.send({ type: 'kick' });
+  connections.delete(peerId);
+  addSystemMessage(`${entry.name} wurde aus dem Raum entfernt.`);
+  broadcast({ type: 'user-left', id: peerId, name: entry.name });
+  setTimeout(() => { try { entry.conn.close(); } catch (e) {} }, 150);
+  refreshParticipantUI();
+}
+
+// =========================================================================
+// GUEST-LOGIK: kommuniziert ausschließlich mit dem Host, der Nachrichten
+// und Teilnehmer-Ereignisse an alle im Raum weiterleitet.
+// =========================================================================
+
+function handleGuestData(data) {
   switch (data.type) {
 
-    case 'handshake': {
-      // Namensprüfung: identische Namen sind nicht erlaubt, damit jeder
-      // Teilnehmer im Raum eindeutig identifizierbar bleibt.
-      if (data.name === myName) {
-        connection.send({ type: 'error', reason: 'name-taken' });
-        setTimeout(() => connection.close(), 200);
-        setStatus('error', 'Name bereits vergeben');
-        if (myRole === 'guest') {
-          joinErrorHint.textContent = 'Dieser Name ist bereits im Raum vergeben. Bitte ändere deinen Namen.';
-          joinErrorHint.style.display = 'block';
-          joinRoomBtn.disabled = false;
-        }
-        return;
-      }
-
-      peerName = data.name;
-      peerAvatar = data.avatar || DEFAULT_AVATAR;
-      handshakeDone = true;
-
-      // Bestätigung zurücksenden, damit auch die Gegenseite den Handshake
-      // als abgeschlossen markieren kann (beide Seiten senden das gleiche Event).
-      connection.send({
-        type: 'handshake-ack',
-        name: myName,
-        avatar: myAvatar,
-        role: myRole
-      });
-
-      enterChat();
-      addSystemMessage(`${escapeHtml(peerName)} ist beigetreten.`);
-      break;
-    }
-
     case 'handshake-ack': {
-      peerName = data.name;
-      peerAvatar = data.avatar || DEFAULT_AVATAR;
-      handshakeDone = true;
+      // Teilnehmerliste (Roster) vom Host übernehmen.
+      connections.clear();
+      data.roster.forEach((p) => {
+        if (p.id === peer.id) return;
+        connections.set(p.id, { name: p.name, avatar: p.avatar, role: p.role });
+      });
       enterChat();
+      refreshParticipantUI();
       break;
     }
 
     case 'chat': {
-      renderMessage({ text: data.text, own: false, name: peerName, avatar: peerAvatar });
+      renderMessage({ text: data.text, own: false, name: data.senderName, avatar: data.senderAvatar });
+      break;
+    }
+
+    case 'user-joined': {
+      connections.set(data.id, { name: data.name, avatar: data.avatar, role: 'guest' });
+      addSystemMessage(`${data.name} ist beigetreten.`);
+      refreshParticipantUI();
+      break;
+    }
+
+    case 'user-left': {
+      connections.delete(data.id);
+      addSystemMessage(`${data.name} hat den Raum verlassen.`);
+      refreshParticipantUI();
       break;
     }
 
@@ -599,16 +730,15 @@ function handleIncomingData(data, connection) {
     }
 
     case 'error': {
-      if (data.reason === 'room-full') {
-        setStatus('error', 'Raum bereits belegt');
-        joinErrorHint.textContent = 'Dieser Raum hat bereits einen Teilnehmer.';
-        joinErrorHint.style.display = 'block';
+      joinRoomBtn.disabled = false;
+      if (data.reason === 'wrong-password') {
+        setStatus('error', 'Falsches Passwort');
+        joinErrorHint.textContent = 'Das eingegebene Passwort ist falsch.';
       } else if (data.reason === 'name-taken') {
         setStatus('error', 'Name bereits vergeben');
-        joinErrorHint.textContent = 'Dieser Name ist bereits im Raum vergeben. Bitte ändere deinen Namen und versuche es erneut.';
-        joinErrorHint.style.display = 'block';
+        joinErrorHint.textContent = 'Dieser Name ist im Raum bereits vergeben. Bitte ändere deinen Namen.';
       }
-      joinRoomBtn.disabled = false;
+      joinErrorHint.style.display = 'block';
       break;
     }
   }
@@ -619,22 +749,14 @@ function handleIncomingData(data, connection) {
 function enterChat() {
   setupEl.style.display = 'none';
   chatArea.classList.add('active');
-  setStatus('connected', `Verbunden mit ${myRole === 'host' ? peerName : peerName}`);
+  setStatus('connected', 'Verbunden');
 
   msgInput.disabled = false;
   sendBtn.disabled = false;
-  chatTitle.textContent = `Chat mit ${peerName}`;
+  chatTitle.textContent = 'Chat';
+  roomTag.textContent = 'Raum ' + roomId;
 
   myProfileRole.textContent = myRole === 'host' ? 'Host / Admin' : 'Gast';
-
-  peerCard.style.display = 'flex';
-  noPeerHint.style.display = 'none';
-  peerProfileImg.src = peerAvatar;
-  peerProfileName.textContent = peerName;
-  peerProfileRole.textContent = myRole === 'host' ? 'Gast' : 'Host / Admin';
-
-  // Nur der Host bekommt die Admin-Aktion "Kicken" angezeigt.
-  adminSection.style.display = (myRole === 'host') ? 'flex' : 'none';
 
   msgInput.focus();
 }
@@ -644,14 +766,55 @@ function handleDisconnect(reason) {
   addSystemMessage(reason);
   msgInput.disabled = true;
   sendBtn.disabled = true;
-  peerCard.style.display = 'none';
-  noPeerHint.style.display = 'block';
-  adminSection.style.display = 'none';
+  connections.clear();
+  refreshParticipantUI();
 
-  if (conn) { try { conn.close(); } catch (e) {} }
+  if (hostConn) { try { hostConn.close(); } catch (e) {} }
   if (peer) { try { peer.destroy(); } catch (e) {} }
-  conn = null;
-  handshakeDone = false;
+  hostConn = null;
+}
+
+// ---- Teilnehmerliste rendern -------------------------------------------------
+
+function refreshParticipantUI() {
+  participantList.innerHTML = '';
+  const others = [...connections.entries()];
+
+  participantCount.textContent = others.length ? `(${others.length})` : '';
+  noPeerHint.style.display = others.length ? 'none' : 'block';
+
+  others.forEach(([id, p]) => {
+    const row = document.createElement('div');
+    row.className = 'participant-row';
+
+    const img = document.createElement('img');
+    img.src = p.avatar || DEFAULT_AVATAR;
+
+    const info = document.createElement('div');
+    info.className = 'info';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'name';
+    nameEl.textContent = p.name;
+    const roleEl = document.createElement('div');
+    roleEl.className = 'role';
+    roleEl.textContent = p.role === 'host' ? 'Host / Admin' : 'Gast';
+    info.appendChild(nameEl);
+    info.appendChild(roleEl);
+
+    row.appendChild(img);
+    row.appendChild(info);
+
+    // Nur der Host sieht einen Kick-Button — und nur bei tatsächlichen Gästen.
+    if (myRole === 'host' && p.role === 'guest') {
+      const kickBtn = document.createElement('button');
+      kickBtn.className = 'btn-danger';
+      kickBtn.textContent = 'Kicken';
+      kickBtn.addEventListener('click', () => kickParticipant(id));
+      row.appendChild(kickBtn);
+    }
+
+    participantList.appendChild(row);
+  });
 }
 
 // ---- Nachrichten senden / anzeigen ------------------------------------------
@@ -693,36 +856,23 @@ function renderMessage({ text, own, name, avatar }) {
 
 function sendMessage() {
   const text = msgInput.value.trim();
-  if (!text || !conn || !handshakeDone) return;
+  if (!text) return;
 
-  conn.send({ type: 'chat', text });
-  renderMessage({ text, own: true, name: myName, avatar: myAvatar });
+  if (myRole === 'host') {
+    // Host zeigt die eigene Nachricht an und verteilt sie an alle Gäste.
+    renderMessage({ text, own: true, name: myName, avatar: myAvatar });
+    broadcast({ type: 'chat', text, senderId: peer.id, senderName: myName, senderAvatar: myAvatar });
+  } else if (hostConn) {
+    // Gast schickt die Nachricht nur an den Host, der sie weiterverteilt.
+    renderMessage({ text, own: true, name: myName, avatar: myAvatar });
+    hostConn.send({ type: 'chat', text });
+  }
   msgInput.value = '';
 }
 
 sendBtn.addEventListener('click', sendMessage);
 msgInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') sendMessage();
-});
-
-// ---- Admin: Teilnehmer kicken ------------------------------------------------
-
-kickBtn.addEventListener('click', () => {
-  if (!conn || myRole !== 'host') return;
-  // Abbruch-Signal an den Gast senden, bevor die Verbindung geschlossen wird.
-  conn.send({ type: 'kick' });
-  addSystemMessage(`${peerName} wurde aus dem Raum entfernt.`);
-  setTimeout(() => {
-    if (conn) { try { conn.close(); } catch (e) {} }
-    conn = null;
-    handshakeDone = false;
-    setStatus('waiting', 'Warte auf Teilnehmer …');
-    msgInput.disabled = true;
-    sendBtn.disabled = true;
-    peerCard.style.display = 'none';
-    noPeerHint.style.display = 'block';
-    adminSection.style.display = 'none';
-  }, 150);
 });
 </script>
 </body>
